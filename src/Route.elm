@@ -7,7 +7,6 @@ import Url.Parser as Parser exposing ((</>), Parser, map, s, string, top)
 type Route
     = Homepage
     | SignIn
-    | About
     | Careers
     | NotFound
 
@@ -18,7 +17,6 @@ fromUrl url =
         |> Parser.parse
             (Parser.oneOf
                 [ map Homepage top
-                , map About (s "about")
                 , map SignIn (s "sign-in")
                 , map Careers (s "careers")
                 ]
@@ -35,9 +33,6 @@ toUrl route url =
                         case route of
                             Homepage ->
                                 []
-
-                            About ->
-                                [ "about" ]
 
                             SignIn ->
                                 [ "sign-in" ]

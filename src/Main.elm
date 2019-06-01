@@ -6,7 +6,6 @@ import Browser.Navigation as Nav
 import Context
 import Html exposing (..)
 import Html.Attributes exposing (href)
-import Page.About
 import Page.Careers
 import Page.Homepage
 import Page.NotFound
@@ -28,8 +27,7 @@ type alias Model =
 
 
 type Page
-    = About Page.About.Model
-    | Careers Page.Careers.Model
+    = Careers Page.Careers.Model
     | Homepage Page.Homepage.Model
     | SignIn Page.SignIn.Model
     | NotFound
@@ -39,7 +37,6 @@ type Msg
     = AppRequestedUrl UrlRequest
     | AppChangedUrl Url
     | AppSentContextMsg Context.Msg
-    | AboutPageSentMsg Page.About.Msg
     | CareersPageSentMsg Page.Careers.Msg
     | HomepagePageSentMsg Page.Homepage.Msg
     | SignInPageSentMsg Page.SignIn.Msg
@@ -50,17 +47,7 @@ createPage =
 
 
 pages =
-    { about =
-        createPage <|
-            Application.fromSandboxPage
-                { title = "About"
-                , init = Page.About.init
-                , update = Page.About.update
-                , view = Page.About.view
-                , toMsg = AboutPageSentMsg
-                , toModel = About
-                }
-    , careers =
+    { careers =
         createPage <|
             Application.fromElementPage
                 { title = "Careers"
@@ -132,9 +119,6 @@ initPage context route =
         Route.SignIn ->
             pages.signIn.init context
 
-        Route.About ->
-            pages.about.init context
-
         Route.Careers ->
             pages.careers.init context
 
@@ -156,8 +140,7 @@ view model =
         [ div []
             [ ol []
                 (List.map (viewLink route model.url)
-                    [ ( Route.About, "About (Sandbox)" )
-                    , ( Route.Careers, "Careers (Element)" )
+                    [ ( Route.Careers, "Careers (Element)" )
                     , ( Route.Homepage, "Home (Document)" )
                     , ( Route.SignIn, "Sign In (Application)" )
                     , ( Route.NotFound, "Not Found (Static)" )
@@ -191,9 +174,6 @@ viewPage { url, page, context } =
 
         SignIn model ->
             pages.signIn.view context model
-
-        About model ->
-            pages.about.view context model
 
         Careers model ->
             pages.careers.view context model
@@ -243,14 +223,6 @@ update msg model =
                     , Cmd.none
                     )
 
-        AboutPageSentMsg msg_ ->
-            case model.page of
-                About model_ ->
-                    updatePage model (pages.about.update model.context msg_ model_)
-
-                _ ->
-                    ( model, Cmd.none )
-
         CareersPageSentMsg msg_ ->
             case model.page of
                 Careers model_ ->
@@ -286,9 +258,6 @@ updatePage model ( page, cmd ) =
 subscriptions : Model -> Sub Msg
 subscriptions { page, context } =
     case page of
-        About model ->
-            pages.about.subscriptions model context
-
         Homepage model ->
             pages.homepage.subscriptions model context
 
