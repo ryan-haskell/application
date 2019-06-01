@@ -3,14 +3,16 @@ module Main exposing (main)
 import Application
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
-import Html exposing (Html)
-import Page.WeekView
+import Context
+import Html exposing (..)
+import Html.Attributes exposing (href)
+import Page.About
+import Page.Careers
+import Page.Homepage
+import Page.NotFound
+import Page.SignIn
+import Route exposing (Route)
 import Url exposing (Url)
-
-
-type alias Context =
-    { user : Maybe String
-    }
 
 
 type alias Flags =
@@ -20,30 +22,73 @@ type alias Flags =
 type alias Model =
     { key : Nav.Key
     , url : Url
-    , context : Context
-    , page : PageModel
+    , context : Context.Model
+    , page : Page
     }
 
 
-type PageModel
-    = WeekView Page.WeekView.Model
+type Page
+    = About Page.About.Model
+    | Careers Page.Careers.Model
+    | Homepage Page.Homepage.Model
+    | SignIn Page.SignIn.Model
+    | NotFound
 
 
 type Msg
     = AppRequestedUrl UrlRequest
     | AppChangedUrl Url
-    | WeekViewPageSentMsg Page.WeekView.Model Page.WeekView.Msg
+    | AppSentContextMsg Context.Msg
+    | AboutPageSentMsg Page.About.Msg
+    | CareersPageSentMsg Page.Careers.Msg
+    | HomepagePageSentMsg Page.Homepage.Msg
+    | SignInPageSentMsg Page.SignIn.Msg
+
+
+createPage =
+    Application.createPageHandler AppSentContextMsg
 
 
 pages =
-    { weekView =
-        Application.createPageHandler
-            { init = Page.WeekView.init
-            , update = Page.WeekView.update
-            , view = Page.WeekView.view
-            , subscriptions = Page.WeekView.subscriptions
-            , toMsg = WeekViewPageSentMsg
-            , toModel = WeekView
+    { about =
+        createPage <|
+            Application.fromSandboxPage
+                { title = "About"
+                , init = Page.About.init
+                , update = Page.About.update
+                , view = Page.About.view
+                , toMsg = AboutPageSentMsg
+                , toModel = About
+                }
+    , careers =
+        createPage <|
+            Application.fromElementPage
+                { title = "Careers"
+                , init = Page.Careers.init
+                , view = Page.Careers.view
+                , update = Page.Careers.update
+                , subscriptions = Page.Careers.subscriptions
+                , toMsg = CareersPageSentMsg
+                , toModel = Careers
+                }
+    , homepage =
+        createPage <|
+            Application.fromDocumentPage
+                { init = Page.Homepage.init
+                , update = Page.Homepage.update
+                , view = Page.Homepage.view
+                , subscriptions = Page.Homepage.subscriptions
+                , toMsg = HomepagePageSentMsg
+                , toModel = Homepage
+                }
+    , signIn =
+        createPage
+            { init = Page.SignIn.init
+            , update = Page.SignIn.update
+            , view = Page.SignIn.view
+            , subscriptions = Page.SignIn.subscriptions
+            , toMsg = SignInPageSentMsg
+            , toModel = SignIn
             }
     }
 
@@ -64,51 +109,194 @@ init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         context =
-            Context Nothing
+            Context.Model Nothing
 
-        page =
-            pages.weekView.init context
+        ( pageModel, cmd ) =
+            initPage context (Route.fromUrl url)
     in
     ( { key = key
       , url = url
       , context = context
-      , page = page.model
+      , page = pageModel
       }
-    , page.cmd
+    , cmd
     )
+
+
+initPage : Context.Model -> Route -> ( Page, Cmd Msg )
+initPage context route =
+    case route of
+        Route.Homepage ->
+            pages.homepage.init context
+
+        Route.SignIn ->
+            pages.signIn.init context
+
+        Route.About ->
+            pages.about.init context
+
+        Route.Careers ->
+            pages.careers.init context
+
+        Route.NotFound ->
+            ( NotFound, Cmd.none )
 
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "Document"
-    , body = [ viewPage model ]
+    let
+        page =
+            viewPage model
+
+        route =
+            Route.fromUrl model.url
+    in
+    { title = page.title
+    , body =
+        [ div []
+            [ ol []
+                (List.map (viewLink route model.url)
+                    [ ( Route.About, "About (Sandbox)" )
+                    , ( Route.Careers, "Careers (Element)" )
+                    , ( Route.Homepage, "Home (Document)" )
+                    , ( Route.SignIn, "Sign In (Application)" )
+                    , ( Route.NotFound, "Not Found (Static)" )
+                    ]
+                )
+            , div [] page.body
+            ]
+        ]
     }
 
 
-viewPage : Model -> Html Msg
+viewLink : Route -> Url -> ( Route, String ) -> Html Msg
+viewLink currentRoute url ( route, label ) =
+    li []
+        [ a [ href (Route.toUrl route url |> Url.toString) ] [ text label ]
+        , text
+            (if currentRoute == route then
+                " (current route)"
+
+             else
+                ""
+            )
+        ]
+
+
+viewPage : Model -> Browser.Document Msg
 viewPage { url, page, context } =
     case page of
-        WeekView model ->
-            pages.weekView.view model context
+        Homepage model ->
+            pages.homepage.view context model
+
+        SignIn model ->
+            pages.signIn.view context model
+
+        About model ->
+            pages.about.view context model
+
+        Careers model ->
+            pages.careers.view context model
+
+        NotFound ->
+            { title = "Not Found"
+            , body = [ Page.NotFound.view ]
+            }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        AppRequestedUrl _ ->
-            ( model, Cmd.none )
+        AppRequestedUrl urlRequest ->
+            case urlRequest of
+                Internal url ->
+                    ( model
+                    , Nav.pushUrl model.key (Url.toString url)
+                    )
+
+                External url ->
+                    ( model
+                    , Nav.load url
+                    )
 
         AppChangedUrl url ->
-            ( { model | url = url }
-            , Cmd.none
+            let
+                ( pageModel, pageCmd ) =
+                    initPage model.context (Route.fromUrl url)
+            in
+            ( { model
+                | url = url
+                , page = pageModel
+              }
+            , pageCmd
             )
 
-        WeekViewPageSentMsg model_ msg_ ->
-            pages.weekView.update msg_ model_ model.context model
+        AppSentContextMsg msg_ ->
+            case msg_ of
+                Context.SignIn user ->
+                    ( { model | context = Context.signIn user model.context }
+                    , Cmd.none
+                    )
+
+                Context.SignOut ->
+                    ( { model | context = Context.signOut model.context }
+                    , Cmd.none
+                    )
+
+        AboutPageSentMsg msg_ ->
+            case model.page of
+                About model_ ->
+                    updatePage model (pages.about.update model.context msg_ model_)
+
+                _ ->
+                    ( model, Cmd.none )
+
+        CareersPageSentMsg msg_ ->
+            case model.page of
+                Careers model_ ->
+                    updatePage model (pages.careers.update model.context msg_ model_)
+
+                _ ->
+                    ( model, Cmd.none )
+
+        HomepagePageSentMsg msg_ ->
+            case model.page of
+                Homepage model_ ->
+                    updatePage model (pages.homepage.update model.context msg_ model_)
+
+                _ ->
+                    ( model, Cmd.none )
+
+        SignInPageSentMsg msg_ ->
+            case model.page of
+                SignIn model_ ->
+                    updatePage model (pages.signIn.update model.context msg_ model_)
+
+                _ ->
+                    ( model, Cmd.none )
+
+
+updatePage : Model -> ( Page, Cmd Msg ) -> ( Model, Cmd Msg )
+updatePage model ( page, cmd ) =
+    ( { model | page = page }
+    , cmd
+    )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions { page, context } =
     case page of
-        WeekView model ->
-            pages.weekView.subscriptions model context
+        About model ->
+            pages.about.subscriptions model context
+
+        Homepage model ->
+            pages.homepage.subscriptions model context
+
+        SignIn model ->
+            pages.signIn.subscriptions model context
+
+        Careers model ->
+            pages.careers.subscriptions model context
+
+        NotFound ->
+            Sub.none
