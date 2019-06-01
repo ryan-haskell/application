@@ -79,6 +79,12 @@ type alias ApplicationPage context contextMsg model msg appModel appMsg =
 
 __Example:__ [`Page.SignIn`](./src/Page/SignIn.elm)
 
+## Adding in a page
+
+With `ryannhg/application`, this diff shows us how to add in a new page:
+
+https://github.com/ryannhg/application/commit/e534ffb56bfc24adbcc153f30e0a13d972ffbfc9
+
 
 ## Try it out!
 
